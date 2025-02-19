@@ -26,20 +26,23 @@ class UserDataView(APIView):
 class PlaceRecommendView(APIView):
     def post(self, request):
         user_input = request.data.get('user_input', '').strip()
+        display_count = request.data.get('display_count', 5)
         
         if not user_input:
             return Response({'message' : '메세지를 입력하세요.'}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            display = 5
-        except ValueError:
-            return Response({'message' : 'display 값이 올바르지 않습니다. 숫자를 입력하세요.'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            travel_recommendations = get_travel_recommendations(user_input, display)
+            travel_recommendations = get_travel_recommendations(user_input, display_count)
             return Response({'추천 여행지' : travel_recommendations}, status=status.HTTP_200_OK)
+        
         except Exception as e:
             return Response({'message' : f'오류 발생: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # try:
+        #     travel_recommendations = get_travel_recommendations(user_input, display)
+        #     return Response({'추천 여행지' : travel_recommendations}, status=status.HTTP_200_OK)
+        # except Exception as e:
+        #     return Response({'message' : f'오류 발생: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 #1.요청--> 사용자에게 정보를 보여줘야함= 메소드 : 겟
 #2.처리--> 네이버 API 끌어땡겨서 보여줘야댐
 #3.응답--> 2번의 데이터를 제이슨형태로 변환하여 보여줄 것
@@ -49,10 +52,11 @@ class ChatbotResponseView(APIView):
     def post(self, request):
         try:
             user_input = request.data.get('user_input')
+            user_data = request.data.get('user_data')
             if not user_input:
                 return Response({'message' : '사용자의 입력이 필요합니다.'}, status=status.HTTP_400_BAD_REQUEST)
             
-            bot_response = ChatbotService.get_chatgpt_response(user_input)
+            bot_response = ChatbotService.get_chatgpt_response(user_input, user_data)
             
             return Response({'user_input' : user_input, 'bot_response' : bot_response}, status=status.HTTP_200_OK)
         except Exception as e:

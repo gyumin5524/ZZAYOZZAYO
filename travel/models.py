@@ -45,7 +45,7 @@ class ChatInteraction(models.Model):
         recommend_destinations = get_travel_recommendations('인기 여행지')
         
         if recommend_destinations:
-            return f'추천 여행지: {', '.join(recommend_destinations)} 중 하나를 선택해 주세요!'
+            return f"추천 여행지: {', '.join(recommend_destinations)} 중 하나를 선택해 주세요!"
         else:
             return '현재 추천할 여행지 정보를 가져올 수 없습니다. 나중에 다시 시도해 주세요.'
         
