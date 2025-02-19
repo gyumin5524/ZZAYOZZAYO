@@ -10,7 +10,7 @@ NAVER_CLIENT_SECRET = settings.NAVER_CLIENT_SECRET
 OPENAI_API_KEY = settings.OPENAI_API_KEY
 
 
-def get_travel_recommendations(keyword='국내 여행지 추천'):
+def get_travel_recommendations(keyword):
     url = 'https://openapi.naver.com/v1/search/local.json'
     headers = {
         "X-Naver-Client-Id": NAVER_CLIENT_ID,

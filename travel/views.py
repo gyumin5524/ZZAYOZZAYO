@@ -24,16 +24,19 @@ class UserDataView(APIView):
 
 
 class PlaceRecommendView(APIView):
-    def get(self, request):
-        keyword = request.GET.get('query', '국내 여행지 추천')
+    def post(self, request):
+        user_input = request.data.get('user_input', '').strip()
+        
+        if not user_input:
+            return Response({'message' : '메세지를 입력하세요.'}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            display = int(request.GET.get('display', 5))
+            display = 5
         except ValueError:
             return Response({'message' : 'display 값이 올바르지 않습니다. 숫자를 입력하세요.'}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            travel_recommendations = get_travel_recommendations(keyword, display)
+            travel_recommendations = get_travel_recommendations(user_input, display)
             return Response({'추천 여행지' : travel_recommendations}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({'message' : f'오류 발생: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
