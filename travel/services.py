@@ -64,9 +64,9 @@ class ChatbotService:
                 '일정은 하루를 오전, 점심, 오후, 저녁 순으로 나누고 각 활동에 대해 상세한 설명을 추가하세요. '
                 '사용자가 요청한 여행에 맞게 여행 일정을 계획해주세요. 예를 들어 "서울 2일 여행 일정"이라면 서울에 맞는 여행 일정을 제공해 주세요. '
                 f'사용자가 요청한 여행: '
-                f'시작 날짜: {user_data["start_date"]}, '
+                f'시작 날짜: {user_data.get["start_date"]}, '
                 f'종료 날짜: {user_data["end_date"]}, '
-                f'목적지: {user_data["destination"]}, '
+                f'목적지: {user_data.get["destination"]}, '
                 f'여행 선호도: {user_data["preference"]}'},
                         {'role' : 'user', 'content' : user_input}],
             temperature = 0.7)
