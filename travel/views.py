@@ -2,7 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .models import UserData
-from .services import get_travel_recommendations, ChatbotService
+from .services import retrieve_travel_context, ChatbotService
 from .serializers import UserDataSerializer
 
 # Create your views here.
@@ -32,7 +32,7 @@ class PlaceRecommendView(APIView):
             return Response({'message' : '메세지를 입력하세요.'}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            travel_recommendations = get_travel_recommendations(user_input, display_count)
+            travel_recommendations = retrieve_travel_context(user_input, display_count)
             return Response({'추천 여행지' : travel_recommendations}, status=status.HTTP_200_OK)
         
         except Exception as e:

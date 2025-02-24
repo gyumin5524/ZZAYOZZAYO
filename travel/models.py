@@ -1,13 +1,13 @@
 from django.db import models
 from django.core.exceptions import ValidationError
-from .services import get_travel_recommendations
+from .services import retrieve_travel_context
 
 
 class UserData(models.Model):
     start_date = models.DateField()
     end_date = models.DateField()
     preference = models.TextField()
-    destination = models.CharField(max_length=255)
+    destination = models.CharField(max_length=255, null=True, blank=True)
     
     def duration(self):
         try:
@@ -42,7 +42,7 @@ class ChatInteraction(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     
     def recommend_destination(self):
-        recommend_destinations = get_travel_recommendations('인기 여행지')
+        recommend_destinations = retrieve_travel_context('인기 여행지')
         
         if recommend_destinations:
             return f"추천 여행지: {', '.join(recommend_destinations)} 중 하나를 선택해 주세요!"
