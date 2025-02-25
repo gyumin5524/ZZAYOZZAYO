@@ -19,6 +19,14 @@ ZZAYOZZAYO는 원하는 날짜와 지역을 선택하고 정해진 선호도를 
 |  | `/api/chatbot/` | `POST` | 사용자 입력을 받아 ChatGPT 응답 반환 | `{ "user_input": "오늘 날씨 어때?" }` | `{ "user_input": "오늘 날씨 어때?", "bot_response": "오늘 서울의 날씨는 맑고 따뜻합니다." }` |
  
 ## 파일별 역할
+``````
+
+```📦프론트엔드
+ ┗ 📂streamlit                 # Streamlit을 사용한 프론트엔드 애플리케이션 폴더
+   ┣ 📜app.py                  # 프로토 타입 1
+   ┣ 📜app2.py                 # 프로토 타입 2
+   ┗ 📜streamlit.py            # 최종 완료 streamlit.py ```
+
 
 ## 트러블슈팅
 ### **📌**백엔드
