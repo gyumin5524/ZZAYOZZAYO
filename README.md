@@ -19,7 +19,8 @@ ZZAYOZZAYO는 원하는 날짜와 지역을 선택하고 정해진 선호도를 
 |  | `/api/chatbot/` | `POST` | 사용자 입력을 받아 ChatGPT 응답 반환 | `{ "user_input": "오늘 날씨 어때?" }` | `{ "user_input": "오늘 날씨 어때?", "bot_response": "오늘 서울의 날씨는 맑고 따뜻합니다." }` |
  
 ## 파일별 역할
-```📦백엔드
+```
+📦백엔드
  ┣ 📂travel                 # 메인 앱 (여행 및 챗봇 기능 구현)
  ┃ ┣ 📜crawled_data_models.py   # 네이버 API 크롤링 데이터 모델 정의
  ┃ ┣ 📜embedding.py             # 임베딩 모델 초기화 및 FAISS 인덱스 관리
