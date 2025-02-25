@@ -43,7 +43,8 @@ ZZAYOZZAYO는 원하는 날짜와 지역을 선택하고 정해진 선호도를 
  ┣ 📜db.sqlite3                # SQLite 데이터베이스 파일 (로컬 개발용)
  ┣ 📜manage.py                 # Django 관리 명령어를 위한 진입점
  ┣ 📜README.md                 # 프로젝트 설명 및 사용법 문서
- ┗ 📜requirements.txt          # Python 패키지 의존성 목록```
+ ┗ 📜requirements.txt          # Python 패키지 의존성 목록
+```
 
 
 
