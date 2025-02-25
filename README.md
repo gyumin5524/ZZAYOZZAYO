@@ -9,7 +9,7 @@ ZZAYOZZAYO는 원하는 날짜와 지역을 선택하고 정해진 선호도를 
 
 
 ## 와이어프레임
-
+![Image](https://github.com/user-attachments/assets/933c8735-6525-463c-a01c-711ebb498c67)
 
 ## API 명세서
 
