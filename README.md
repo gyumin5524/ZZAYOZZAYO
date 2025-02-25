@@ -45,7 +45,12 @@ ZZAYOZZAYO는 원하는 날짜와 지역을 선택하고 정해진 선호도를 
  ┣ 📜README.md                 # 프로젝트 설명 및 사용법 문서
  ┗ 📜requirements.txt          # Python 패키지 의존성 목록
 ```
-
+```📦프론트엔드
+ ┗ 📂streamlit                 # Streamlit을 사용한 프론트엔드 애플리케이션 폴더
+   ┣ 📜app.py                  # 프로토 타입 1
+   ┣ 📜app2.py                 # 프로토 타입 2
+   ┗ 📜streamlit.py            # 최종 완료 streamlit.py
+```
 
 
 
