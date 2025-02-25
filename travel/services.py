@@ -1,179 +1,204 @@
+import random
 import requests
-import openai
 import json
+from sentence_transformers import SentenceTransformer
 import faiss
 import numpy as np
-from sentence_transformers import SentenceTransformer
 from django.conf import settings
-from openai import OpenAIError
-
-# LangChain 관련 모듈 임포트
-from langchain.chat_models import ChatOpenAI
+from openai import OpenAI, OpenAIError
+from langchain_openai import OpenAI
 from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
 
-# OpenAI API 키 전역 설정
-openai.api_key = settings.OPENAI_API_KEY
+client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
-# 네이버 API 키는 settings에서 가져옴
+# ✅ OpenAI API 및 네이버 API 설정
 NAVER_CLIENT_ID = settings.NAVER_CLIENT_ID
 NAVER_CLIENT_SECRET = settings.NAVER_CLIENT_SECRET
 
-# 임베딩 모델 초기화 (BERT 기반 SentenceTransformer)
-embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+# ✅ 임베딩 모델 초기화 (BERT 기반 SentenceTransformer)
+embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 embedding_dim = embedding_model.get_sentence_embedding_dimension()
 
-# FAISS 인덱스 생성 (메모리 내 인덱스, 실제 서비스에서는 디스크 저장 고려)
+# ✅ FAISS 인덱스 생성
 faiss_index = faiss.IndexFlatL2(embedding_dim)
-# 문서(텍스트) 저장 리스트 (인덱스와 매핑)
-document_texts = []
+document_texts = []  # 문서 원본 저장
 
-def crawl_naver_api(query, display_count=5):
+
+# ------------------------------------------------------------------------------
+# ✅ 1. 네이버 API 여행지 추천 (get_travel_recommendations)
+# ------------------------------------------------------------------------------
+def get_travel_recommendations(keyword, display_count=5):
     """
-    네이버 API를 호출하여 여행 관련 데이터를 크롤링하는 함수.
-    반환: 각 문서(텍스트)의 리스트.
+    네이버 API를 사용하여 여행지 추천 목록을 가져오는 함수.
     """
-    url = 'https://openapi.naver.com/v1/search/local.json'
+    url = "https://openapi.naver.com/v1/search/local.json"
     headers = {
         "X-Naver-Client-Id": NAVER_CLIENT_ID,
-        "X-Naver-Client-Secret": NAVER_CLIENT_SECRET
+        "X-Naver-Client-Secret": NAVER_CLIENT_SECRET,
     }
-    params = {'query': query, 'display': display_count}
+    params = {"query": keyword, "display": display_count}
+    response = requests.get(url, headers=headers, params=params)
+
+    if response.status_code == 200:
+        try:
+            data = response.json()
+            travel_spots = [item["title"].replace("<b>", "").replace("</b>", "") for item in data["items"]]
+            print(data)
+            return "\n".join(travel_spots) if travel_spots else "네이버 API에서 여행지 데이터를 찾을 수 없습니다."
+        except json.JSONDecodeError:
+            return "API 응답을 처리하는 중 오류가 발생했습니다."
+    else:
+        return f"네이버 API 오류 발생 (상태 코드: {response.status_code})"
+
+
+# ------------------------------------------------------------------------------
+# ✅ 2. 네이버 API 크롤링 데이터 수집 (fetch_data_from_naver, crawl_naver_api)
+# ------------------------------------------------------------------------------
+def fetch_data_from_naver(query="여행", display_count=50):
+    from .models import CrawledData
+    """
+    네이버 API를 호출하여 여행 관련 데이터를 가져오는 함수.
+    """
+    url = "https://openapi.naver.com/v1/search/local.json"
+    headers = {
+        "X-Naver-Client-Id": NAVER_CLIENT_ID,
+        "X-Naver-Client-Secret": NAVER_CLIENT_SECRET,
+    }
+    params = {"query": query, "display": display_count}
+
     response = requests.get(url, headers=headers, params=params)
     if response.status_code == 200:
         data = response.json()
-        docs = []
-        for item in data.get('items', []):
-            # 크롤링 시 제목과 설명을 결합하여 하나의 문서로 구성
-            text = item.get('title', '') + " " + item.get('description', '')
-            # HTML 태그 제거 (간단하게)
-            text = text.replace('<b>', '').replace('</b>', '')
-            docs.append(text.strip())
-        return docs
+        for item in data['items']:  # API 응답 형식에 맞게 데이터 처리
+            title = item['title'].replace("<b>", "").replace("</b>", "").replace("&amp;", "")
+            content = item['description'].replace("<b>", "").replace("</b>", "").replace("&amp;", "")
+            url = item['link']
+
+            # 네이버 크롤링 데이터를 데이터베이스에 저장
+            crawled_data = CrawledData.objects.create(
+                title=title,
+                content=content,
+                url=url,
+                embedding=None  # 임베딩은 나중에 처리
+            )
+
+
+def crawl_naver_api(query, display_count=50):
+    """
+    네이버 API를 사용하여 여행 관련 데이터를 크롤링하는 함수.
+    """
+    url = "https://openapi.naver.com/v1/search/local.json"
+    headers = {
+        "X-Naver-Client-Id": NAVER_CLIENT_ID,
+        "X-Naver-Client-Secret": NAVER_CLIENT_SECRET,
+    }
+    params = {"query": query, "display": display_count}
+    response = requests.get(url, headers=headers, params=params)
+
+    if response.status_code == 200:
+        try:
+            data = response.json()
+            docs = []
+            for item in data.get("items", []):
+                text = item.get("title", "") + " " + item.get("description", "")
+                text = text.replace("<b>", "").replace("</b>", "")
+                docs.append(text.strip())
+            return docs
+        except json.JSONDecodeError:
+            return []
     else:
         return []
 
+
+# ------------------------------------------------------------------------------
+# ✅ 3. FAISS 인덱스 구축 및 검색
+# ------------------------------------------------------------------------------
 def build_faiss_index(docs):
     """
-    주어진 문서 목록을 임베딩하고, FAISS 인덱스를 구축합니다.
+    크롤링한 문서를 임베딩하고, FAISS 인덱스를 구축합니다.
     """
     global faiss_index, document_texts
     if docs:
         embeddings = embedding_model.encode(docs, convert_to_numpy=True)
-        # FAISS 인덱스 초기화 (reset)
         faiss_index.reset()
         faiss_index.add(embeddings)
         document_texts = docs
     return faiss_index
 
+
 def search_faiss_index(query, top_k=3):
     """
-    FAISS 인덱스를 이용하여 쿼리에 가장 유사한 문서들을 검색합니다.
+    FAISS 인덱스를 이용하여 쿼리에 가장 유사한 문서 검색.
     """
     query_embedding = embedding_model.encode([query], convert_to_numpy=True)
     distances, indices = faiss_index.search(query_embedding, top_k)
-    results = []
-    for idx in indices[0]:
-        if idx < len(document_texts):
-            results.append(document_texts[idx])
+    results = [document_texts[idx] for idx in indices[0] if idx < len(document_texts)]
     return results
 
-def generate_response(user_query, retrieved_context):
-    """
-    LangChain의 LLMChain을 사용하여 사용자 질문에 대한 답변을 생성하는 함수.
-    """
-    prompt_template = PromptTemplate(
-        input_variables=["retrieved_context", "user_query"],
-        template=(
-            "다음 참고 자료를 바탕으로 사용자의 질문에 대해 답변해 주세요:\n"
-            "참고 자료:\n{retrieved_context}\n\n"
-            "사용자 질문: {user_query}\n\n"
-            "답변:"
-        )
-    )
-    chat_model = ChatOpenAI(model_name='gpt-4', temperature=0)
-    chain = LLMChain(llm=chat_model, prompt=prompt_template)
-    result = chain.run({
-        "retrieved_context": retrieved_context,
-        "user_query": user_query
-    })
-    return result
 
+# ------------------------------------------------------------------------------
+# ✅ 4. RAG 기반 여행 컨텍스트 검색
+# ------------------------------------------------------------------------------
 def retrieve_travel_context(query, display_count=3):
     """
-    OpenAI API를 사용하여 여행 일정 가이드 관련 간결한 참고 자료(텍스트)를 생성합니다.
+    OpenAI API를 사용하여 여행 일정 관련 참고 자료를 생성하는 함수.
     """
     prompt = (
-        f"'{query}'에 대한 여행 일정을 계획하기 위한 간결한 여행 컨텍스트와 가이던스를 제공해 주세요. "
+        f"'{query}'에 대한 여행 일정을 계획하기 위한 간결한 여행 컨텍스트와 가이드를 제공해 주세요. "
         "답변은 짧은 문단 형식으로 작성해 주세요."
     )
-    try:
-        response = openai.ChatCompletion.create(
-            model='gpt-4o-mini',
-            messages=[
-                {"role": "system", "content": "당신은 동선 및 시간 효율까지 고려하는 경력 20년차의 섬세한 베테랑 여행 가이드입니다."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0
-        )
-        context_text = response['choices'][0]['message']['content'].strip()
-        return context_text
-    except Exception as e:
-        return f"오류 발생: {str(e)}"
-
-def build_retrieval_context(user_data, user_query):
-    """
-    RAG를 위한 검색 쿼리를 생성하고, FAISS 인덱스를 통해 관련 문서를 검색하여
-    하나의 텍스트(참고 자료)로 구성합니다.
-    """
-    # 예를 들어, 사용자 목적지와 관련된 정보를 검색 쿼리로 사용
-    retrieval_query = f"{user_data['destination']} 여행 정보"
-    # 크롤링을 통해 문서를 수집
-    crawled_docs = crawl_naver_api(retrieval_query, display_count=5)
-    if crawled_docs:
-        build_faiss_index(crawled_docs)
-        top_docs = search_faiss_index(user_query, top_k=3)
-        context = "\n".join(top_docs)
-        return context
+    
+    docs = crawl_naver_api(query=query, display_count=display_count)
+    
+    if docs:
+        build_faiss_index(docs)
+        top_docs = search_faiss_index(query, top_k=5)
+        print(top_docs)
+        return top_docs  # 🔹 개행으로 문장 구분
     else:
         return "관련 정보가 없습니다."
 
+
+# ------------------------------------------------------------------------------
+# ✅ 5. LangChain LLM을 이용한 챗봇 응답 생성
+# ------------------------------------------------------------------------------
+def generate_response(user_data, user_input):
+    """
+    LangChain의 LLMChain을 사용하여 사용자 질문에 대한 답변을 생성하는 함수.
+    """
+    retrieved_context = retrieve_travel_context(user_input)
+
+    prompt_template = PromptTemplate(
+        input_variables=["retrieved_context", "user_input", "user_data"],
+        template="📌 참고 자료:\n{retrieved_context}\n\n"
+                 "❓ 사용자 질문:\n{user_input}\n\n"
+                 "✏️ 답변:"
+    )
+
+    chat_model = OpenAI(model="gpt-4", temperature=0)
+    
+    chain = LLMChain(llm=chat_model, prompt=prompt_template)
+
+    response = chain.invoke({
+        "retrieved_context": retrieved_context,
+        "user_input": user_input,
+        "user_data": user_data,
+    })
+    print(response)
+
+    return response.replace("\n", " ")  # 🔹 개행 없이 문장 유지
+
+
+# ------------------------------------------------------------------------------
+# ✅ 6. ChatbotService (LangChain + RAG 기반 응답 생성)
+# ------------------------------------------------------------------------------
 class ChatbotService:
     @staticmethod
     def get_chatgpt_response(user_input, user_data):
-        """
-        LangChain의 LLMChain을 사용하여 사용자의 요청에 맞는 답변(여행 일정 또는 일반 질문 응답)을 생성합니다.
-        
-        동작 원리:
-        1. RAG: 사용자 목적지 기반으로 관련 참고 자료(여행 컨텍스트)를 구축합니다.
-           - 크롤링 → 임베딩(FAISS) → 검색을 통해 retrieval_context를 구성합니다.
-        2. retrieval_context와 사용자 질문을 LangChain 체인에 전달하여 최종 답변 생성.
-        """
         try:
-            response = client.chat.completions.create(model = 'gpt-4',
-            messages = [{'role' : 'system', 'content' : '당신은 경력 20년차 베테랑 여행 가이드입니다. '
-                '사용자가 요청하면 JSON 형식으로 상세한 여행 일정을 반환합니다. '
-                '일정은 하루를 오전, 점심, 오후, 저녁 순으로 나누고 각 활동에 대해 상세한 설명을 추가하세요. '
-                '사용자가 요청한 여행에 맞게 여행 일정을 계획해주세요. 예를 들어 "서울 2일 여행 일정"이라면 서울에 맞는 여행 일정을 제공해 주세요. '
-                f'사용자가 요청한 여행: '
-                f'시작 날짜: {user_data.get["start_date"]}, '
-                f'종료 날짜: {user_data["end_date"]}, '
-                f'목적지: {user_data.get["destination"]}, '
-                f'여행 선호도: {user_data["preference"]}'},
-                        {'role' : 'user', 'content' : user_input}],
-            temperature = 0.7)
-            raw_schedule = response.choices[0].message.content.strip()
-
-            # try:
-            #     schedule = json.loads(raw_schedule)
-            # except json.JSONDecodeError:
-            #     return {'error' : '일정 추천 결과를 처리하는 중 오류가 발생했습니다. 다시 시도해 주세요.', 'raw_response' : raw_schedule}
-
-            # adjusted_schedule = adjust_travel_schedule(schedule)
-            # return {'schedule' : raw_schedule}
-            return raw_schedule
-
+            return generate_response(user_data, user_input)
         except OpenAIError as oe:
-            return {'error': f'OpenAI API 호출 오류: {str(oe)}'}
+            return {"error": f"OpenAI API 호출 오류: {str(oe)}"}
         except Exception as e:
-            return f'오류 발생: {str(e)}'
+            return f"오류 발생: {str(e)}"

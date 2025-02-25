@@ -25,15 +25,20 @@ class UserData(models.Model):
     def __str__(self):
         duration = self.duration()
         return f'{self.destination} ({self.start_date} ~ {self.end_date}, 총 {duration}일)'
-        
-        
-class Place(models.Model): # 네이버 API 땡겨쓰면 사라질 가능성 있는 애임
-    name = models.CharField(max_length=255)
-    data = models.JSONField()
-    
-    def __str__(self):
-        return self.name
 
+
+class CrawledData(models.Model):
+    """
+    네이버 API로부터 크롤링한 데이터를 저장하기 위한 모델.
+    """
+    title = models.CharField(max_length=255)  # 제목
+    content = models.TextField()             # 설명, 본문
+    url = models.URLField()                  # 해당 문서(사이트) 링크
+    embedding = models.JSONField(null=True)  # 임베딩 벡터 (JSON 형태로 저장)
+
+    def __str__(self):
+        return self.title
+    
 
 class ChatInteraction(models.Model):
     user_data = models.ForeignKey(UserData, on_delete=models.CASCADE)

@@ -2,27 +2,23 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .models import UserData
-from .services import retrieve_travel_context, ChatbotService
 from .serializers import UserDataSerializer
+from .services import fetch_data_from_naver, build_faiss_index, ChatbotService, retrieve_travel_context, crawl_naver_api
+from .langchain_llm import generate_response
+from .rag import search_similar_documents
+from .embedding import generate_embedding
+import numpy as np
 
-# Create your views here.
 
 class UserDataView(APIView):
     def post(self, request):
-        try:
-            serializer = UserDataSerializer(data=request.data)
-            if serializer.is_valid():
-                serializer.save()
-                return Response({'message' : '사용자 정보 저장 성공!'}, status=status.HTTP_201_CREATED)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            return Response({'message' : f'오류 발생: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-# 1.요청--> 사용자 정보 받아오기= 메소드 : 포스트
-# 2.처리--> 디비에 저장해야함
-# 3.응답--> 리스폰스 저장 성공
-
-
-
+        serializer = UserDataSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({'message': '사용자 정보 저장 성공!'}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    
 class PlaceRecommendView(APIView):
     def post(self, request):
         user_input = request.data.get('user_input', '').strip()
@@ -32,35 +28,136 @@ class PlaceRecommendView(APIView):
             return Response({'message' : '메세지를 입력하세요.'}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            travel_recommendations = retrieve_travel_context(user_input, display_count)
+            travel_recommendations = crawl_naver_api(user_input, display_count)
             return Response({'추천 여행지' : travel_recommendations}, status=status.HTTP_200_OK)
         
         except Exception as e:
             return Response({'message' : f'오류 발생: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        # try:
-        #     travel_recommendations = get_travel_recommendations(user_input, display)
-        #     return Response({'추천 여행지' : travel_recommendations}, status=status.HTTP_200_OK)
-        # except Exception as e:
-        #     return Response({'message' : f'오류 발생: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-#1.요청--> 사용자에게 정보를 보여줘야함= 메소드 : 겟
-#2.처리--> 네이버 API 끌어땡겨서 보여줘야댐
-#3.응답--> 2번의 데이터를 제이슨형태로 변환하여 보여줄 것
 
 
-class ChatbotResponseView(APIView):
+class CrawlAndIndexView(APIView):
+    """
+    네이버 API로 여행 데이터를 크롤링하고 임베딩(FAISS, BERT)을 통해 데이터 저장 및 인덱스 구축하는 엔드포인트.
+    """
     def post(self, request):
+        # 예시: 클라이언트에서 검색어를 보내면 해당 키워드로 크롤링 진행
+        query = request.data.get("query", "여행")
+        docs = fetch_data_from_naver()  # 네이버 API 크롤링
+        if docs:
+            build_faiss_index(docs)
+            return Response({"message": "크롤링 및 인덱스 구축 완료", "documents": docs}, status=status.HTTP_200_OK)
+        else:
+            return Response({"error": "크롤링 실패"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class ChatResponseView(APIView):
+    """
+    RAG와 LangChain LLM을 사용하여 사용자 질문에 대해 답변을 생성하는 엔드포인트.
+    """
+    def post(self, request):
+        user_query = request.data.get("user_query")
+        user_data = request.data.get("user_data")
+        if not user_query:
+            return Response({"error": "질문을 입력하세요."}, status=status.HTTP_400_BAD_REQUEST)
+        if not user_data:
+            return Response({"error": "사용자 정보를 제공하세요."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        answer = ChatbotService.get_chatgpt_response(user_query, user_data)
+        return Response({
+            "user_query": user_query,
+            "answer": answer
+        }, status=status.HTTP_200_OK)
+
+# class ChatbotAPIView(APIView):
+#     def post(self, request, *args, **kwargs):
+#         query = request.data.get('query', {})
+#         print(query)
+#         # 여기서 쿼리의 유저데이터, 인풋 분리시킬 것
+#         user_data = query.get('user_data', '')
+#         user_input = query.get('user_input', '')
+        
+#         print(type(user_data))
+#         print(user_input)
+        
+#         if not query:
+#             return Response({"error": "query is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+#         # 1. 사용자가 입력한 질문에 대해 임베딩을 생성
+#         query_embedding = generate_embedding(''.join(user_data[2:])).reshape(1, -1)
+#         print(''.join(user_data[2:]))
+        
+#         # 2. RAG 방식으로 유사한 문서 검색
+#         # similar_document = search_similar_documents(query_embedding)
+        
+#         # if similar_document is None:
+#         #     return Response({"error": "No similar documents found."}, status=status.HTTP_404_NOT_FOUND)
+        
+#         # 3. LangChain을 사용하여 유사한 문서를 기반으로 답변 생성
+#         try:
+#             response = generate_response(query_embedding, user_input)
+#             return Response({"response": response}, status=status.HTTP_200_OK)
+#         except Exception as e:
+#             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class ChatbotAPIView(APIView):
+    def post(self, request, *args, **kwargs):
+        query = request.data.get('query', {})
+
+        if not query:
+            return Response({"error": "query is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        user_data = query.get('user_data', '')
+        user_input = query.get('user_input', '')
+
+        if not user_input:
+            return Response({"error": "user_input 내놔."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if isinstance(user_data, list):
+            user_data_text = ' '.join([str(item) for item in user_data[2:]]) if len(user_data) > 2 else ' '.join(
+                [str(item) for item in user_data])
+        else:
+            user_data_text = str(user_data).strip()
+
+        print(f"Processed user_data: {user_data_text}")
+
         try:
-            user_input = request.data.get('user_input')
-            user_data = request.data.get('user_data')
-            if not user_input:
-                return Response({'message' : '사용자의 입력이 필요합니다.'}, status=status.HTTP_400_BAD_REQUEST)
-            
-            bot_response = ChatbotService.get_chatgpt_response(user_input, user_data)
-            
-            return Response({'user_input' : user_input, 'bot_response' : bot_response}, status=status.HTTP_200_OK)
+            query_embedding = generate_embedding(user_data_text)
+
+            # NaN 벡터 검사
+            if np.isnan(query_embedding).any() or np.isinf(query_embedding).any():
+                print(f"zero vector 변환.")
+                query_embedding = np.zeros(768, dtype=np.float32)
+
+            query_embedding = query_embedding.reshape(1, -1)
+
+            if np.isnan(query_embedding).any() or np.isinf(query_embedding).any():
+                return Response({"error": "임베딩이 NaN을 포함하고 있어 안됨."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
         except Exception as e:
-            return Response({'error' : f'서버 오류: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-#1.요청--> 지피티한테 사용자와의 대화정보 데이터를 입력해서 넘겨줘야함= 메소드 : 포스트
-#2.처리--> 지피티 API 양식 입력
-#3.응답--> 지피티가 정리해서 response (얘도 응답방식을 모르기 땜에 네이버 클래스뷰 응답처럼 제이슨 변환해야함)
+            return Response({"error": f"임베딩 생성 중 오류 발생: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        try:
+            print(f"query_embedding.shape: {query_embedding.shape}")
+            print(f"user_input: {user_input}")
+
+            response = generate_response(query_embedding, user_input)
+
+        except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"LangChain 응답 생성 오류: {str(e)}\n{error_details}")
+            response = "LangChain 응답 생성 오류.. 후... 뭐야 이게."
+
+        return Response({"response": response}, status=status.HTTP_200_OK)
+        
+class FetchDataAPIView(APIView):
+    def post(self, request, *args, **kwargs):
+        query = request.data.get('query')  # 'query'는 요청의 바디에서 받아오는 키워드
+        if not query:
+            return Response({"error": "query is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # 네이버 API 크롤링 실행, 키워드를 전달
+            fetch_data_from_naver(query=query)
+            return Response({"message": "데이터 크롤링이 완료되었습니다."}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)       
