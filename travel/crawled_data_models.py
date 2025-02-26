@@ -29,14 +29,14 @@ def fetch_data_from_naver():
         data = response.json()
         for item in data.get("items", []):
             title = item.get("title", "").replace("<b>", "").replace("</b>", "")
-            content = item.get("description", "").replace("<b>", "").replace("</b>", "")
             url = item.get("link", "")
+            address = item.get("address", "")
 
             # 모델에 저장 (이미 존재하면 중복 저장 방지 로직 등을 추가할 수 있음)
             CrawledData.objects.create(
                 title=title,
-                content=content,
                 url=url,
+                address=address,
                 embedding=None  # 임베딩은 추후 업데이트
             )
     else:

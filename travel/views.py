@@ -7,6 +7,7 @@ from .services import fetch_data_from_naver, build_faiss_index, ChatbotService, 
 from .langchain_llm import generate_response
 from .rag import search_similar_documents
 from .embedding import generate_embedding
+from .update_embedding import update_embeddings_for_crawled_data
 import numpy as np
 
 
@@ -48,6 +49,7 @@ class CrawlAndIndexView(APIView):
             return Response({"message": "크롤링 및 인덱스 구축 완료", "documents": docs}, status=status.HTTP_200_OK)
         else:
             return Response({"error": "크롤링 실패"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class ChatResponseView(APIView):
     """
@@ -101,23 +103,32 @@ class ChatResponseView(APIView):
 class ChatbotAPIView(APIView):
     def post(self, request, *args, **kwargs):
         query = request.data.get('query', {})
+        print(query)
 
         if not query:
             return Response({"error": "query is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         user_data = query.get('user_data', '')
         user_input = query.get('user_input', '')
+        print(user_data)
+        print(user_input)
 
         if not user_input:
             return Response({"error": "user_input 내놔."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if isinstance(user_data, list):
-            user_data_text = ' '.join([str(item) for item in user_data[2:]]) if len(user_data) > 2 else ' '.join(
-                [str(item) for item in user_data])
+        # if isinstance(user_data, list):
+        #     user_data_text = ' '.join([str(item) for item in user_data[2:]]) if len(user_data) > 2 else ' '.join([str(item) for item in user_data])
+        # else:
+        #     user_data_text = str(user_data).strip()
+        
+        if user_data is None:
+            user_data_text = "" 
+        elif isinstance(user_data, dict):
+            user_data_text = user_data.get('destination', '')
         else:
-            user_data_text = str(user_data).strip()
+            user_data_text = ' '.join([str(item) for item in user_data])
 
-        print(f"Processed user_data: {user_data_text}")
+        print(f"Processed user_data_text: {user_data_text}")
 
         try:
             query_embedding = generate_embedding(user_data_text)
@@ -139,7 +150,7 @@ class ChatbotAPIView(APIView):
             print(f"query_embedding.shape: {query_embedding.shape}")
             print(f"user_input: {user_input}")
 
-            response = generate_response(query_embedding, user_input)
+            response = generate_response(query_embedding, user_input, user_data)
 
         except Exception as e:
             import traceback
@@ -148,6 +159,7 @@ class ChatbotAPIView(APIView):
             response = "LangChain 응답 생성 오류.. 후... 뭐야 이게."
 
         return Response({"response": response}, status=status.HTTP_200_OK)
+        
         
 class FetchDataAPIView(APIView):
     def post(self, request, *args, **kwargs):
@@ -160,4 +172,15 @@ class FetchDataAPIView(APIView):
             fetch_data_from_naver(query=query)
             return Response({"message": "데이터 크롤링이 완료되었습니다."}, status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)       
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)    
+        
+
+class EmbeddingDataView(APIView):
+    def post(self, request, *args, **kwargs):
+        try:
+            update_embeddings_for_crawled_data()
+
+            return Response({"message": "임베딩 업데이트가 완료되었습니다."}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": f"임베딩 업데이트 중 오류 발생: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

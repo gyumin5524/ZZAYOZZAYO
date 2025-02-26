@@ -31,9 +31,9 @@ class CrawledData(models.Model):
     """
     네이버 API로부터 크롤링한 데이터를 저장하기 위한 모델.
     """
-    title = models.CharField(max_length=255)  # 제목
-    content = models.TextField()             # 설명, 본문
+    title = models.CharField(max_length=255)  # 제목       
     url = models.URLField()                  # 해당 문서(사이트) 링크
+    address = models.TextField()             # 추천지 주소
     embedding = models.JSONField(null=True)  # 임베딩 벡터 (JSON 형태로 저장)
 
     def __str__(self):

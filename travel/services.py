@@ -72,14 +72,14 @@ def fetch_data_from_naver(query="여행", display_count=50):
         data = response.json()
         for item in data['items']:  # API 응답 형식에 맞게 데이터 처리
             title = item['title'].replace("<b>", "").replace("</b>", "").replace("&amp;", "")
-            content = item['description'].replace("<b>", "").replace("</b>", "").replace("&amp;", "")
+            address = item['address']
             url = item['link']
 
             # 네이버 크롤링 데이터를 데이터베이스에 저장
             crawled_data = CrawledData.objects.create(
                 title=title,
-                content=content,
                 url=url,
+                address=address,
                 embedding=None  # 임베딩은 나중에 처리
             )
 
@@ -99,6 +99,7 @@ def crawl_naver_api(query, display_count=50):
     if response.status_code == 200:
         try:
             data = response.json()
+            print(data)
             docs = []
             for item in data.get("items", []):
                 text = item.get("title", "") + " " + item.get("description", "")
